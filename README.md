@@ -10,9 +10,27 @@ docker compose up -d --build
 
 Open `http://LXC_IP:8080`.
 
+## Screenshots
+
+### Translation input
+
+![FluenTics translation input](docs/screenshots/translation-input.png)
+
+### Translation result and corrections
+
+![FluenTics translation result](docs/screenshots/history-result.png)
+
 ## Configure providers and models
 
 The default provider is OpenAI with `gpt-5.4-nano` as the primary model and `gpt-5-nano` as the fallback. All settings are configured from the web interface; no `.env` file is required.
+
+Supported providers:
+
+- OpenAI
+- Claude (Anthropic)
+- Gemini (Google)
+- Grok (xAI)
+- DeepSeek
 
 The provider, primary model, fallback model, translation direction, prompt, and all provider API keys can be configured from the web settings panel. API keys are stored in the persistent Docker volume `fluentics-data` and blank key fields preserve the existing value. Since the settings panel displays the configured keys, protect access to the private application.
 
