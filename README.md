@@ -1,5 +1,7 @@
 # FluenTics
 
+[![Tests](https://github.com/micromante/fluentics/actions/workflows/tests.yml/badge.svg)](https://github.com/micromante/fluentics/actions/workflows/tests.yml)
+
 Private web application for translating between English and Spanish. It silently corrects mistakes in the input and shows only the final translation. Press `Enter` to translate and `Shift+Enter` to insert a line break.
 
 ## Run with Docker
