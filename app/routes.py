@@ -1,10 +1,12 @@
 import time
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from app.schemas import TranslationRequest, TranslationResponse
 from app.preferences import UserPreferences
+from app.history import HistoryEntry
 from app.services.translator import TranslationServiceError
 
 router = APIRouter()
@@ -39,6 +41,37 @@ class ConfigUpdate(BaseModel):
 @router.get("/health")
 async def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@router.get("/api/history", response_model=list[HistoryEntry])
+async def history(request: Request) -> list[HistoryEntry]:
+    return request.app.state.history_store.load()
+
+
+@router.get("/api/history/{entry_id}", response_model=HistoryEntry)
+async def history_entry(request: Request, entry_id: str) -> HistoryEntry:
+    entry = request.app.state.history_store.get(entry_id)
+    if entry is None:
+        raise HTTPException(status_code=404, detail="History entry not found")
+    return entry
+
+
+@router.delete("/api/history/{entry_id}", status_code=204)
+async def delete_history_entry(request: Request, entry_id: str) -> None:
+    try:
+        deleted = request.app.state.history_store.delete(entry_id)
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail="Could not update history") from exc
+    if not deleted:
+        raise HTTPException(status_code=404, detail="History entry not found")
+
+
+@router.delete("/api/history", status_code=204)
+async def clear_history(request: Request) -> None:
+    try:
+        request.app.state.history_store.clear()
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail="Could not clear history") from exc
 
 
 @router.get("/api/config", response_model=ConfigResponse)
@@ -111,7 +144,7 @@ async def translate(request: Request, payload: TranslationRequest) -> Translatio
     except TranslationServiceError as exc:
         raise HTTPException(status_code=502, detail="The translation could not be completed") from exc
 
-    return TranslationResponse(
+    response = TranslationResponse(
         corrected_text=result.get("corrected_text", text).strip(),
         translation=result["translation"].strip(),
         alternatives=[item.strip() for item in result["alternatives"][:2]],
@@ -119,3 +152,21 @@ async def translate(request: Request, payload: TranslationRequest) -> Translatio
         latency_ms=round((time.perf_counter() - started) * 1000),
         corrections=result.get("corrections", []),
     )
+    try:
+        request.app.state.history_store.add(
+            HistoryEntry(
+                created_at=datetime.now(timezone.utc).isoformat(),
+                original_text=text,
+                corrected_text=response.corrected_text,
+                translation=response.translation,
+                alternatives=response.alternatives,
+                corrections=response.corrections,
+                detected_language=response.detected_language,
+                provider=request.app.state.user_preferences.provider,
+                model=request.app.state.user_preferences.model,
+                latency_ms=response.latency_ms,
+            )
+        )
+    except OSError:
+        pass
+    return response

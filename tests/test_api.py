@@ -3,6 +3,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.config import Settings
+from app.history import HistoryStore
 from app.main import create_app
 from app.services.translator import TranslationServiceError
 
@@ -26,9 +27,12 @@ class FakeTranslationService:
         return self.result
 
 
-def make_client(service=None, **settings_overrides):
+def make_client(service=None, history_path=None, **settings_overrides):
     settings = Settings(openai_api_key="test-key", **settings_overrides)
-    return TestClient(create_app(settings=settings, translation_service=service or FakeTranslationService()))
+    app = create_app(settings=settings, translation_service=service or FakeTranslationService())
+    if history_path:
+        app.state.history_store = HistoryStore(history_path)
+    return TestClient(app)
 
 
 def test_health_and_config():
@@ -69,9 +73,9 @@ def test_rejects_invalid_config():
     assert response.status_code == 400
 
 
-def test_translate_returns_clean_result_and_corrections():
+def test_translate_returns_clean_result_and_corrections(tmp_path):
     service = FakeTranslationService()
-    response = make_client(service).post("/api/translate", json={"text": "  Ola  "})
+    response = make_client(service, history_path=tmp_path / "history.json").post("/api/translate", json={"text": "  Ola  "})
     body = response.json()
     assert response.status_code == 200
     assert service.received_text == "Ola"
@@ -103,3 +107,46 @@ def test_provider_factory_rejects_missing_key():
 def test_returns_bad_gateway_when_service_fails():
     response = make_client(FakeTranslationService(error=True)).post("/api/translate", json={"text": "Hello"})
     assert response.status_code == 502
+
+
+def test_translation_is_saved_in_history(tmp_path):
+    client = make_client(history_path=tmp_path / "history.json")
+    response = client.post("/api/translate", json={"text": "Hello"})
+    assert response.status_code == 200
+    entries = client.get("/api/history").json()
+    assert len(entries) == 1
+    assert entries[0]["original_text"] == "Hello"
+    assert entries[0]["translation"] == "Hello."
+
+
+def test_history_can_open_delete_and_clear_entries(tmp_path):
+    client = make_client(history_path=tmp_path / "history.json")
+    client.post("/api/translate", json={"text": "First"})
+    client.post("/api/translate", json={"text": "Second"})
+    entries = client.get("/api/history").json()
+    assert entries[0]["original_text"] == "Second"
+    entry_id = entries[0]["id"]
+    assert client.get(f"/api/history/{entry_id}").json()["id"] == entry_id
+    assert client.delete(f"/api/history/{entry_id}").status_code == 204
+    assert len(client.get("/api/history").json()) == 1
+    assert client.delete("/api/history").status_code == 204
+    assert client.get("/api/history").json() == []
+
+
+def test_history_store_survives_reload(tmp_path):
+    path = tmp_path / "history.json"
+    store = HistoryStore(path)
+    entry = {
+        "created_at": "2026-01-01T00:00:00+00:00",
+        "original_text": "Hello",
+        "corrected_text": "Hello",
+        "translation": "Hola",
+        "alternatives": ["Buenas", "Hola"],
+        "detected_language": "en",
+        "provider": "openai",
+        "model": "test-model",
+        "latency_ms": 10,
+    }
+    from app.history import HistoryEntry
+    store.add(HistoryEntry(**entry))
+    assert HistoryStore(path).load()[0].translation == "Hola"

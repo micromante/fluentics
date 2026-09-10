@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#202124">
+  <title>History · FluenTics</title>
+  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+  <link rel="apple-touch-icon" href="/static/favicon.svg">
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <main class="shell history-page">
+    <header class="history-header">
+      <a class="text-button" href="/">← New translation</a>
+      <div class="history-actions"><h1>History</h1><button id="clear-history" class="danger-button" type="button" hidden>Clear history</button></div>
+    </header>
+    <p id="history-error" class="history-error" role="alert" hidden></p>
+    <section id="history-list" class="history-list" aria-live="polite"></section>
+  </main>
+  <script src="/static/history.js"></script>
+</body>
+</html>

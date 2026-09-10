@@ -23,6 +23,18 @@ fetch('/api/config')
   .then((data) => { applySettings(data); })
   .catch(() => { modelName.textContent = 'configured model'; });
 
+const historyId = new URLSearchParams(window.location.search).get('history');
+if (historyId) {
+  fetch(`/api/history/${encodeURIComponent(historyId)}`)
+    .then((response) => response.json().then((data) => ({response, data})))
+    .then(({response, data}) => {
+      if (!response.ok) throw new Error(data.detail || 'Could not load history entry.');
+      renderResult(data, data.original_text);
+      startView.hidden = true; resultView.hidden = false;
+    })
+    .catch((error) => showError(startError, error.message));
+}
+
 document.querySelector('#settings-button').addEventListener('click', async () => {
   settingsStatus.textContent = '';
   if (!settingsDialog.open) settingsDialog.showModal();
@@ -78,8 +90,15 @@ form.addEventListener('submit', async (event) => {
     const response = await fetch('/api/translate', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({text}) });
     const data = await response.json();
     if (!response.ok) throw new Error(data.detail || 'The text could not be translated.');
+    renderResult(data, text);
+    startView.hidden = true; resultView.hidden = false; window.scrollTo({top: 0, behavior: 'smooth'});
+  } catch (error) { showError(startView.hidden ? resultError : startError, error.message); }
+  finally { loading.hidden = true; form.querySelector('button').disabled = false; }
+});
+
+function renderResult(data, originalText) {
     output.textContent = data.translation;
-    originalOutput.textContent = data.corrected_text || text;
+    originalOutput.textContent = data.corrected_text || originalText;
     alternativesList.replaceChildren();
     for (const alternative of data.alternatives || []) {
       const row = document.createElement('div'); row.className = 'alternative';
@@ -103,10 +122,7 @@ form.addEventListener('submit', async (event) => {
     correctionsPanel.hidden = !(data.corrections && data.corrections.length);
     document.querySelector('#language-label').textContent = data.detected_language === 'es' ? 'English' : 'Spanish';
     document.querySelector('#latency').textContent = `${data.latency_ms} ms`;
-    startView.hidden = true; resultView.hidden = false; window.scrollTo({top: 0, behavior: 'smooth'});
-  } catch (error) { showError(startView.hidden ? resultError : startError, error.message); }
-  finally { loading.hidden = true; form.querySelector('button').disabled = false; }
-});
+}
 
 copyButton.addEventListener('click', async () => {
   try { await copyText(output.textContent); copyButton.textContent = 'Copied'; setTimeout(() => { copyButton.textContent = 'Copy'; }, 1400); }

@@ -20,6 +20,10 @@ The provider, primary model, fallback model, translation direction, prompt, and 
 
 Click the gear icon to change the provider, primary/fallback models, translation direction, prompt, and API keys. Changes are saved to the persistent Docker volume and persist when the container is recreated. Do not use `docker compose down -v` unless you intentionally want to delete the stored configuration.
 
+## Translation history
+
+Successful translations are saved in the persistent Docker volume. Open History from the top bar to reopen a complete result, delete individual entries, or clear the entire history.
+
 ## Tests
 
 Unit tests do not call OpenAI or consume API credits:
